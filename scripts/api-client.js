@@ -1,0 +1,295 @@
+/**
+ * Ocean Hazard API Client
+ * Handles all API communication with FastAPI backend
+ */
+
+class OceanHazardAPI {
+    constructor(baseURL = 'http://localhost:8001/api') {
+        this.baseURL = baseURL;
+        this.token = localStorage.getItem('oceanGuardToken');
+        this.user = JSON.parse(localStorage.getItem('oceanGuardUser') || 'null');
+    }
+
+    // Helper method to get headers with auth token
+    getHeaders() {
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        
+        if (this.token) {
+            headers['Authorization'] = `Bearer ${this.token}`;
+        }
+        
+        return headers;
+    }
+
+    // Helper method to handle API responses
+    async handleResponse(response) {
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `HTTP ${response.status}`);
+        }
+        return await response.json();
+    }
+
+    // Authentication methods
+    async login(username, password) {
+        const formData = new FormData();
+        formData.append('username', username);
+        formData.append('password', password);
+
+        const response = await fetch(`${this.baseURL}/auth/login`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await this.handleResponse(response);
+        
+        // Store token and user data
+        this.token = data.access_token;
+        this.user = data.user;
+        localStorage.setItem('oceanGuardToken', this.token);
+        localStorage.setItem('oceanGuardUser', JSON.stringify(this.user));
+        
+        return data;
+    }
+
+    async register(userData) {
+        console.log('🌊 Ocean Guard Registration Attempt:', userData);
+        console.log('🔗 API URL:', `${this.baseURL}/auth/register`);
+        
+        try {
+            const response = await fetch(`${this.baseURL}/auth/register`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(userData)
+            });
+
+            console.log('📡 Response status:', response.status);
+            console.log('📡 Response OK:', response.ok);
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            console.error('❌ Network error during registration:', error);
+            throw new Error(`Network error: ${error.message}`);
+        }
+    }
+
+    async logout() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem('oceanGuardToken');
+        localStorage.removeItem('oceanGuardUser');
+    }
+
+    // User methods
+    async getCurrentUser() {
+        const response = await fetch(`${this.baseURL}/auth/me`, {
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async updateUser(userData) {
+        const response = await fetch(`${this.baseURL}/users/me`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(userData)
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    // Incident methods
+    async createIncident(incidentData) {
+        const response = await fetch(`${this.baseURL}/incidents/`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(incidentData)
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async getIncidents(filters = {}) {
+        const params = new URLSearchParams();
+        
+        Object.keys(filters).forEach(key => {
+            if (filters[key] !== null && filters[key] !== undefined) {
+                params.append(key, filters[key]);
+            }
+        });
+
+        const response = await fetch(`${this.baseURL}/incidents/?${params}`, {
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async getIncident(incidentId) {
+        const response = await fetch(`${this.baseURL}/incidents/${incidentId}`, {
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async verifyIncident(incidentId) {
+        const response = await fetch(`${this.baseURL}/incidents/${incidentId}/verify`, {
+            method: 'PUT',
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async deployResponse(incidentId) {
+        const response = await fetch(`${this.baseURL}/incidents/${incidentId}/deploy`, {
+            method: 'PUT',
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async resolveIncident(incidentId) {
+        const response = await fetch(`${this.baseURL}/incidents/${incidentId}/resolve`, {
+            method: 'PUT',
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    // Analytics methods
+    async getDashboardAnalytics() {
+        const response = await fetch(`${this.baseURL}/analytics/dashboard`, {
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async getIncidentsTimeline(days = 30) {
+        const response = await fetch(`${this.baseURL}/analytics/incidents/timeline?days=${days}`, {
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async getIncidentsDistribution() {
+        const response = await fetch(`${this.baseURL}/analytics/incidents/distribution`, {
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    async getGeographicAnalytics() {
+        const response = await fetch(`${this.baseURL}/analytics/geographic`, {
+            headers: this.getHeaders()
+        });
+
+        return await this.handleResponse(response);
+    }
+
+    // WebSocket connection for real-time updates
+    connectWebSocket() {
+        if (!this.token) {
+            console.warn('No authentication token available for WebSocket connection');
+            return null;
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/ws/incidents`;
+        
+        const ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            // Send authentication token
+            ws.send(JSON.stringify({
+                type: 'auth',
+                token: this.token
+            }));
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            this.handleWebSocketMessage(data);
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket disconnected');
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        return ws;
+    }
+
+    handleWebSocketMessage(data) {
+        // Handle different types of WebSocket messages
+        switch (data.type) {
+            case 'new_incident':
+                this.handleNewIncident(data.data);
+                break;
+            case 'incident_update':
+                this.handleIncidentUpdate(data.data);
+                break;
+            case 'status_update':
+                this.handleStatusUpdate(data.data);
+                break;
+            default:
+                console.log('Unknown WebSocket message type:', data.type);
+        }
+    }
+
+    handleNewIncident(incidentData) {
+        // Show notification for new incidents (admin/authority only)
+        if (this.user && ['admin', 'authority'].includes(this.user.role)) {
+            this.showNotification('New Incident Reported', `Incident ${incidentData.reference_id} reported`, 'warning');
+        }
+    }
+
+    handleIncidentUpdate(incidentData) {
+        // Update incident in UI if displayed
+        console.log('Incident updated:', incidentData);
+    }
+
+    handleStatusUpdate(incidentData) {
+        // Show notification for status updates
+        this.showNotification('Incident Status Updated', `Incident ${incidentData.reference_id} status changed to ${incidentData.status}`, 'info');
+    }
+
+    showNotification(title, message, type = 'info') {
+        // Create and show notification
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <div class="notification-content">
+                <h4>${title}</h4>
+                <p>${message}</p>
+                <button onclick="this.parentElement.parentElement.remove()">Close</button>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+}
+
+// Create global API instance
+window.oceanHazardAPI = new OceanHazardAPI();
+

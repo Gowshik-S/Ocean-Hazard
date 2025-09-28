@@ -161,15 +161,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- SECTION 6: USER STATE & HEADER MANAGEMENT ---
 
     function checkLoginState() {
-        const user = JSON.parse(sessionStorage.getItem('oceanGuardUser'));
+        const user = window.oceanHazardAPI.user;
 
-        if (user && user.role === 'public') {
+        if (user) {
+            // Update navigation based on user role
+            updateNavigationForUser(user);
+            
+            // Update nav actions
             if (navActions) {
-                navActions.innerHTML = `
-                    <span class="welcome-user">Welcome, ${user.name}</span>
-                    <a href="#" class="btn btn--primary" id="report-hazard-btn">New Report</a>
-                    <a href="#" id="logout-button" class="btn btn--secondary">Logout</a>
-                `;
+                let navActionsHTML = `<span class="welcome-user">Welcome, ${user.full_name || user.first_name + ' ' + user.last_name}</span>`;
+                
+                if (user.role === 'public') {
+                    navActionsHTML += `
+                        <a href="#" class="btn btn--primary" id="report-hazard-btn">New Report</a>
+                        <a href="#" id="logout-button" class="btn btn--secondary">Logout</a>
+                    `;
+                } else if (user.role === 'admin') {
+                    navActionsHTML += `
+                        <a href="reports.html" class="btn btn--primary">Admin Dashboard</a>
+                        <a href="#" id="logout-button" class="btn btn--secondary">Logout</a>
+                    `;
+                } else if (user.role === 'rescue_team') {
+                    navActionsHTML += `
+                        <a href="reports.html" class="btn btn--primary">Rescue Dashboard</a>
+                        <a href="#" id="logout-button" class="btn btn--secondary">Logout</a>
+                    `;
+                } else if (user.role === 'authority') {
+                    navActionsHTML += `
+                        <a href="reports.html" class="btn btn--primary">Authority Dashboard</a>
+                        <a href="#" id="logout-button" class="btn btn--secondary">Logout</a>
+                    `;
+                }
+                
+                navActions.innerHTML = navActionsHTML;
                 
                 // Re-add event listeners
                 const newReportBtn = document.getElementById('report-hazard-btn');
@@ -186,19 +210,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     logoutBtn.addEventListener('click', logout);
                 }
             }
-        } else if (user && user.role === 'admin') {
-            if (navActions && (window.location.pathname.includes('index.html') || window.location.pathname === '/')) {
-                navActions.innerHTML = `
-                    <span class="welcome-user">Welcome, ${user.name}</span>
-                    <a href="reports.html" class="btn btn--primary">Admin Dashboard</a>
-                    <a href="#" id="logout-button" class="btn btn--secondary">Logout</a>
-                `;
-                
-                const logoutBtn = document.getElementById('logout-button');
-                if (logoutBtn) {
-                    logoutBtn.addEventListener('click', logout);
-                }
-            }
+        }
+    }
+
+    function updateNavigationForUser(user) {
+        // Update navigation menu based on user role
+        const navMenu = document.querySelector('.nav-menu');
+        if (!navMenu) return;
+
+        // Clear existing menu items
+        navMenu.innerHTML = '<li><a href="index.html">Home</a></li>';
+
+        // Add role-specific menu items
+        if (user.role === 'public') {
+            navMenu.innerHTML += `
+                <li><a href="analytics.html">Analytics</a></li>
+                <li><a href="my-reports.html">My Reports</a></li>
+                <li><a href="#">About Us</a></li>
+            `;
+        } else if (user.role === 'admin') {
+            navMenu.innerHTML += `
+                <li><a href="analytics.html">Analytics</a></li>
+                <li><a href="reports.html">Incident Reports</a></li>
+                <li><a href="my-reports.html">My Reports</a></li>
+                <li><a href="#">About Us</a></li>
+            `;
+        } else if (user.role === 'rescue_team') {
+            navMenu.innerHTML += `
+                <li><a href="analytics.html">Analytics</a></li>
+                <li><a href="reports.html">Incident Reports</a></li>
+                <li><a href="my-reports.html">My Reports</a></li>
+                <li><a href="#">About Us</a></li>
+            `;
+        } else if (user.role === 'authority') {
+            navMenu.innerHTML += `
+                <li><a href="analytics.html">Analytics</a></li>
+                <li><a href="reports.html">Incident Reports</a></li>
+                <li><a href="my-reports.html">My Reports</a></li>
+                <li><a href="#">About Us</a></li>
+            `;
         }
     }
 
@@ -206,34 +256,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Login form submission
     if (loginForm) {
-        loginForm.addEventListener('submit', (event) => {
+        loginForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
 
-            let user = null;
-            let redirectTo = '';
+            try {
+                // Use API client for authentication
+                const response = await window.oceanHazardAPI.login(username, password);
+                
+                // Determine redirect based on user role
+                let redirectTo = '';
+                if (response.user.role === 'public') {
+                    redirectTo = 'my-reports.html';
+                } else if (['admin', 'authority'].includes(response.user.role)) {
+                    redirectTo = 'reports.html';
+                }
 
-            if (username.toLowerCase() === 'user' || username.toLowerCase() === 'citizen') {
-                user = { name: 'Gowshik S.', role: 'public' };
-                redirectTo = 'my-reports.html';
-            } else if (username.toLowerCase() === 'admin' || username.toLowerCase() === 'rescue') {
-                user = { name: 'Admin', role: 'admin' };
-                redirectTo = 'reports.html';
-            }
-
-            if (user) {
-                sessionStorage.setItem('oceanGuardUser', JSON.stringify(user));
                 alert('Login successful! Redirecting...');
                 window.location.href = redirectTo;
-            } else {
-                alert('Login failed. Please use "user"/"citizen" for public access or "admin"/"rescue" for professional access.');
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Login failed: ' + error.message);
             }
         });
     }
 
     // Registration form submission
     if (registerForm) {
-        registerForm.addEventListener('submit', (event) => {
+        registerForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             
             const formData = new FormData(registerForm);
@@ -251,83 +303,107 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const userData = {
-                name: `${formData.get('firstname')} ${formData.get('lastname')}`,
+                username: formData.get('email'), // Use email as username
                 email: formData.get('email'),
+                first_name: formData.get('firstname'),
+                last_name: formData.get('lastname'),
                 phone: formData.get('phone'),
                 location: formData.get('location'),
-                role: 'public',
-                registrationDate: new Date().toISOString()
+                password: password
             };
             
-            // In a real app, this would go to a server
-            sessionStorage.setItem('oceanGuardUser', JSON.stringify(userData));
-            alert('Registration successful! Welcome to Ocean Guard!');
-            window.location.href = 'my-reports.html';
+            try {
+                // Use API client for registration
+                const response = await window.oceanHazardAPI.register(userData);
+                alert('Registration successful! Welcome to Ocean Guard!');
+                window.location.href = 'my-reports.html';
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('Registration failed: ' + error.message);
+            }
         });
     }
 
     // Report form submission
     if (reportForm) {
-        reportForm.addEventListener('submit', (event) => {
+        reportForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             
-            const referenceId = generateReferenceId();
             const formData = new FormData(reportForm);
             const urgency = document.querySelector('input[name="urgency"]:checked').value;
             
-            const reportData = {
-                referenceId: referenceId,
-                hazardType: formData.get('hazard-type'),
-                location: formData.get('location'),
+            // Extract coordinates if location contains them
+            const location = formData.get('location');
+            let latitude = null, longitude = null;
+            
+            if (location.includes(',')) {
+                const coords = location.split(',').map(coord => parseFloat(coord.trim()));
+                if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                    latitude = coords[0];
+                    longitude = coords[1];
+                }
+            }
+            
+            const incidentData = {
+                hazard_type: formData.get('hazard-type'),
+                location: location,
+                latitude: latitude,
+                longitude: longitude,
                 description: formData.get('description'),
-                contact: formData.get('contact'),
                 urgency: urgency,
-                timestamp: new Date().toISOString(),
-                status: 'pending'
+                contact_info: formData.get('contact')
             };
 
-            // Store the report
-            let reports = JSON.parse(localStorage.getItem('hazardReports') || '[]');
-            reports.unshift(reportData); // Add to beginning of array
-            localStorage.setItem('hazardReports', JSON.stringify(reports));
-
-            // Show success message with reference ID
-            closeModal(reportModal);
-            
-            // Create and show success notification
-            const notification = document.createElement('div');
-            notification.className = 'success-notification';
-            notification.innerHTML = `
-                <div class="notification-content">
-                    <i class="fas fa-check-circle"></i>
-                    <h3>Report Submitted Successfully!</h3>
-                    <p>Your hazard report has been submitted to the authorities.</p>
-                    <p><strong>Reference ID: ${referenceId}</strong></p>
-                    <p>Please save this reference ID for tracking your report.</p>
-                    <button class="btn btn--primary" onclick="this.parentElement.parentElement.remove()">Close</button>
-                </div>
-            `;
-            
-            document.body.appendChild(notification);
-            
-            // Clear the form
-            reportForm.reset();
-            
-            // Check if user is logged in to redirect appropriately
-            const user = JSON.parse(sessionStorage.getItem('oceanGuardUser'));
-            if (user && user.role === 'public') {
-                setTimeout(() => {
-                    window.location.href = 'my-reports.html';
-                }, 3000);
+            try {
+                // Use API client to create incident
+                const response = await window.oceanHazardAPI.createIncident(incidentData);
+                
+                // Show success message with reference ID
+                closeModal(reportModal);
+                
+                // Create and show success notification
+                const notification = document.createElement('div');
+                notification.className = 'success-notification';
+                notification.innerHTML = `
+                    <div class="notification-content">
+                        <i class="fas fa-check-circle"></i>
+                        <h3>Report Submitted Successfully!</h3>
+                        <p>Your hazard report has been submitted to the authorities.</p>
+                        <p><strong>Reference ID: ${response.reference_id}</strong></p>
+                        <p>Please save this reference ID for tracking your report.</p>
+                        <button class="btn btn--primary" onclick="this.parentElement.parentElement.remove()">Close</button>
+                    </div>
+                `;
+                
+                document.body.appendChild(notification);
+                
+                // Clear the form
+                reportForm.reset();
+                
+                // Check if user is logged in to redirect appropriately
+                const user = window.oceanHazardAPI.user;
+                if (user && user.role === 'public') {
+                    setTimeout(() => {
+                        window.location.href = 'my-reports.html';
+                    }, 3000);
+                }
+                
+            } catch (error) {
+                console.error('Report submission error:', error);
+                alert('Failed to submit report: ' + error.message);
             }
         });
     }
 
     // --- SECTION 8: LOGOUT LOGIC ---
 
-    function logout(e) {
+    async function logout(e) {
         e.preventDefault();
-        sessionStorage.removeItem('oceanGuardUser');
+        try {
+            await window.oceanHazardAPI.logout();
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
         alert('You have been logged out.');
         window.location.href = 'index.html';
     }
@@ -342,20 +418,47 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const currentPage = window.location.pathname.split('/').pop();
 
-    if (currentPage === 'my-reports.html') {
-        const user = JSON.parse(sessionStorage.getItem('oceanGuardUser'));
-        if (!user || user.role !== 'public') {
-            alert('Access Denied. Please log in as a citizen to view your reports.');
+    // Check authentication and role-based access
+    function checkPageAccess() {
+        const user = window.oceanHazardAPI.user;
+        
+        if (!user) {
+            // No user logged in - redirect to login
+            alert('Please log in to access this page.');
             window.location.href = 'index.html';
+            return false;
         }
+
+        // Page-specific access control
+        if (currentPage === 'my-reports.html') {
+            // My Reports: Accessible by public users and rescue teams
+            if (!['public', 'rescue_team'].includes(user.role)) {
+                alert('Access Denied. This page is for citizens and rescue teams only.');
+                window.location.href = 'index.html';
+                return false;
+            }
+        }
+
+        if (currentPage === 'reports.html') {
+            // Incident Reports: Only accessible by admin and rescue teams
+            if (!['admin', 'rescue_team'].includes(user.role)) {
+                alert('Access Denied. This is a professional portal for administrators and rescue teams only.');
+                window.location.href = 'index.html';
+                return false;
+            }
+        }
+
+        if (currentPage === 'analytics.html') {
+            // Analytics: Accessible by any logged-in user
+            // No additional role check needed - any authenticated user can access
+        }
+
+        return true;
     }
 
-    if (currentPage === 'reports.html') {
-        const user = JSON.parse(sessionStorage.getItem('oceanGuardUser'));
-        if (!user || user.role !== 'admin') {
-            alert('Access Denied. This is a professional portal. Please log in with admin credentials.');
-            window.location.href = 'index.html';
-        }
+    // Run access check for protected pages
+    if (['my-reports.html', 'reports.html', 'analytics.html'].includes(currentPage)) {
+        checkPageAccess();
     }
 
     // --- INITIALIZE THE PAGE ---
@@ -393,3 +496,39 @@ function initMiniMap() {
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', initMiniMap);
+
+// TEMPORARY: API Test function
+function testRegistration() {
+    const testResults = document.getElementById('test-results');
+    
+    function log(message) {
+        testResults.innerHTML += message + '\n';
+        testResults.scrollTop = testResults.scrollHeight;
+    }
+    
+    log('🧪 Starting Registration Test...');
+    log('🔗 API Base URL: ' + window.oceanHazardAPI.baseURL);
+    
+    const testUser = {
+        username: 'testuser' + Date.now(),
+        email: 'testuser' + Date.now() + '@example.com',
+        password: 'test123456',
+        first_name: 'Test',
+        last_name: 'User',
+        phone: '1234567890',
+        location: 'Mumbai, India'
+    };
+    
+    log('📤 Testing with user: ' + testUser.email);
+    
+    window.oceanHazardAPI.register(testUser)
+        .then(response => {
+            log('✅ Registration successful!');
+            log('📄 Response: ' + JSON.stringify(response, null, 2));
+        })
+        .catch(error => {
+            log('❌ Registration failed!');
+            log('💥 Error: ' + error.message);
+            log('🔍 Full error: ' + JSON.stringify(error, null, 2));
+        });
+}
