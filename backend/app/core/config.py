@@ -2,7 +2,7 @@
 Configuration settings for Ocean Hazard API
 """
 
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings
 from typing import List
 import os
 
@@ -30,16 +30,17 @@ class Settings(BaseSettings):
     
     # Application
     DEBUG: bool = True
-    HOST: str = "127.0.0.1"
-    PORT: int = 9000
-    WEBSOCKET_PORT: int = 9000  # Use same port as HTTP server
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    WEBSOCKET_PORT: int = 8000  # Use same port as HTTP server
     CORS_ORIGINS: List[str] = [
         "http://localhost:8080",
         "http://127.0.0.1:8080",
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "http://localhost:3000",
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3000",
+        "*"
     ]
     
     # Email
@@ -52,7 +53,7 @@ class Settings(BaseSettings):
     MAPBOX_ACCESS_TOKEN: str = ""
     
     class Config:
-        env_file = ["backend/env.local", "env.local"]  # Try both paths
+        env_file = [".env"]
         case_sensitive = True
         extra = "ignore"  # Ignore extra fields from env file
 
