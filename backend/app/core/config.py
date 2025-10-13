@@ -30,9 +30,9 @@ class Settings(BaseSettings):
     
     # Application
     DEBUG: bool = True
-    HOST: str = "127.0.0.1"
-    PORT: int = 9000
-    WEBSOCKET_PORT: int = 9000  # Use same port as HTTP server
+    HOST: str = os.getenv("HOST", "0.0.0.0")
+    PORT: int = int(os.getenv("PORT", "9000"))
+    WEBSOCKET_PORT: int = int(os.getenv("PORT", "9000"))  # Use same port as HTTP server
     CORS_ORIGINS: List[str] = [
         "http://localhost:8080",
         "http://127.0.0.1:8080",
