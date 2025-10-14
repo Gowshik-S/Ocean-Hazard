@@ -113,7 +113,7 @@ class ReportsManager {
             this.showLoading();
             
             // Use the admin incidents endpoint for authorized users
-            const response = await fetch('http://127.0.0.1:9000/api/incidents/', {
+            const response = await fetch('https://ocean-hazard-1-6j5g.onrender.com/api/incidents/', {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('oceanGuardToken')}`,
                     'Content-Type': 'application/json'
